@@ -1,7 +1,7 @@
 
 function xdot=Underactuated_ship_position_error_NN_OB_20180330_function(t,X,k,c,width,gamma,sigma)
 
-%ANNC¿ØÖÆ
+%ANNCÂ¿Ã˜Ã–Ã†
 
 global e1_bar_0 e1_bar_inf e1_under_0 e1_under_inf kappa_1  
 global e2_bar_0 e2_bar_inf e2_under_0 e2_under_inf kappa_2 
