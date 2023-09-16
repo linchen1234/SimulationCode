@@ -1,6 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Title:Performance-Guaranteed Adaptive Optimized Control of Intelligent Surface Vehicle Using Reinforcement Learning
 %ID:T-IV-23-05-1151
-%Simulation results are given in Section IV-A
+%This code information is the simulation code of the paper
 %Comparison simulation with adaptive neural network control method [38]
 %A critic-network-based reinforcement learning algorithm
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
