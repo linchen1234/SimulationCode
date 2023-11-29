@@ -1,0 +1,927 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Title: Trajectory tracking control for uncertain underactuated surface vessels with guaranteed prescribed performance under stochastic disturbances
+% ID: NODY-D-23-01944
+% This code information is the simulation code of the paper
+% Simulation results are given in subsection 5.1: Adaptive NN Control (ANNC) Protocol 
+% Adaptive NN Control (ANNC) And Model-Based Control (MBC)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clc 
+close all
+tic
+
+global e_bar_1_inf e_bar_10 kappa_1...
+       e_bar_2_inf e_bar_20 kappa_2...
+       e_bar_3_inf e_bar_30 kappa_3;
+global center1 center2 center3 Node11 Node12 Node13;
+
+Node11=80;
+center11=zeros(1,Node11);
+center12=zeros(1,Node11);
+for i=-8:1:0
+    for j=0:1:8
+        center11(j+1+(i+8)*9)=0.4*i;
+        center12(j+1+(i+8)*9)=0.4*j;
+    end
+end
+center1=[center11;center12];
+
+Node12=40;
+center21=zeros(1,Node12);
+center22=zeros(1,Node12);
+for i=0:1:3
+    for j=-6:1:8
+        center21(j+7+(i+0)*15)=0.5*i;
+        center22(j+7+(i+0)*15)=0.5*j;
+    end
+end
+center2=[center21;center22];
+
+Node13=40;
+center31=zeros(1,Node13);
+center32=zeros(1,Node13);
+for i=0:1:3
+    for j=-6:1:8
+        center31(j+7+(i+0)*15)=0.5*i;
+        center32(j+7+(i+0)*15)=0.5*j;
+    end
+end
+center3=[center31;center32];
+
+width=[1.08;0.05;0.04];
+sigma=[1.08;0.03;0.001];
+
+W1_0=zeros(Node11,1);
+W2_0=zeros(Node12,1);
+W3_0=zeros(Node13,1);
+gamma=[30;70;80];
+
+xs0=[0,3,-2,0.5,2,-0.5];
+
+tau_u0=0;
+tau_r0=0;
+beta0=0;  
+
+k_theta1=0.2;   
+k_theta2=0.1;
+k_theta3=0.3;
+k_theta=[k_theta1;k_theta2;k_theta3];
+
+l_1=0.01;   
+l_2=0.01;
+l_3=0.01;
+l=[l_1;l_2;l_3];
+
+k_omega1=0.4;
+k_omega2=0.3;
+k_omega3=0.1;
+k_omega=[k_omega1;k_omega2;k_omega3];
+
+mu_1=0.004;
+mu_2=0.005;
+mu_3=0.006;
+mu=[mu_1;mu_2;mu_3];
+
+hat_theta_10=1.1274;
+hat_theta_20=1.8902;
+hat_theta_30=0.1278;
+
+hat_omega_10=0.2;  
+hat_omega_20=0.4;
+hat_omega_30=0.0003;
+
+k_4=8;  
+k=[58;12;24;  
+   180;56;11];
+kk=[0.001; 0.021; 0.001];     
+varepsilon=[11;15];  
+epsilon=0.04;   
+ 
+e_bar_1_inf=0.03;
+e_bar_10=0.18;
+kappa_1=0.7;
+k_b110=e_bar_10;
+
+e_bar_2_inf=0.5;
+e_bar_20=5;
+kappa_2=0.7;
+k_b120=e_bar_20;
+
+e_bar_3_inf=3;
+e_bar_30=7;
+kappa_3=0.65;
+k_b130=e_bar_30;
+
+D_e_bar_10=-kappa_1*(e_bar_10-e_bar_1_inf);
+D_k_b110=D_e_bar_10;
+
+D_e_bar_20=-kappa_2*(e_bar_20-e_bar_2_inf);
+D_k_b120=D_e_bar_20;
+
+D_e_bar_30=-kappa_3*(e_bar_30-e_bar_3_inf);
+D_k_b130=D_e_bar_30;
+
+K_10=sqrt( (D_k_b110/k_b110)^2 +epsilon);
+K_20=sqrt( (D_k_b120/k_b120)^2 +epsilon);
+K_30=sqrt( (D_k_b130/k_b130)^2 +epsilon);
+
+K_0=[K_10; K_20; K_30];
+
+tfinal=15;
+t_c=5;
+x0=[xs0 beta0 tau_u0 tau_r0 hat_theta_10 hat_theta_20 hat_theta_30 hat_omega_10 hat_omega_20 hat_omega_30 W1_0' W2_0' W3_0']';
+
+[t,x]=ode45(@RBF_OE_Underactuated_USV_function,0:0.1:tfinal,x0,[],k,K_0,kk,varepsilon,k_theta,l,k_omega,mu,k_4,t_c,width,sigma,gamma);
+
+e_bar_1=(e_bar_10-e_bar_1_inf)*exp(-kappa_1*t)+e_bar_1_inf;
+e_bar_2=(e_bar_20-e_bar_2_inf)*exp(-kappa_2*t)+e_bar_2_inf;
+e_bar_3=(e_bar_30-e_bar_3_inf)*exp(-kappa_3*t)+e_bar_3_inf;
+
+k_b11=e_bar_1;
+k_b12=e_bar_2;
+k_b13=e_bar_3;
+
+len=length(t);
+etad1=zeros(len,1);
+etad2=zeros(len,1);
+etad3=zeros(len,1);
+for n=1:len
+    if t(n)<=t_c
+        etad1(n)=1.5*t(n);
+        etad2(n)=0;
+        etad3(n)=0;
+    else
+        etad1(n)=1.5*t_c+8*sin(0.1*(t(n)-t_c));
+        etad2(n)=15*(1-cos(0.1*(t(n)-t_c)));
+        etad3(n)=0.06*(t(n)-t_c);
+    end
+end
+
+figure(1)
+plot(t,x(:,1)-etad1,'-b',t,y(:,1)-etad1,'-.r','LineWidth',1.5);
+hold on
+plot(t,k_b11,'--k','LineWidth',1.5);
+hold on
+plot(t,-k_b11,'--k','LineWidth',1.5);
+hold off
+legend('ANNC','MBC');
+xlabel('Time(sec)');
+ylabel('Tracking error z_{11}');
+
+figure(2)
+plot(t,x(:,2)-etad2,'b',t,y(:,2)-etad2,'-.r','LineWidth',1.5);
+hold on
+plot(t,k_b12,'--k','LineWidth',1.5);
+hold on
+plot(t,-k_b12,'--k','LineWidth',1.5);
+hold off
+legend('ANNC','MBC');
+xlabel('Time(sec)');
+ylabel('Tracking error z_{12}');
+
+
+figure(3)
+plot(t,x(:,3)-etad3,'b',t,y(:,3)-etad3,'-.r','LineWidth',1.5);
+hold on
+plot(t,k_b13,'--k','LineWidth',1.5);
+hold on
+plot(t,-k_b13,'--k','LineWidth',1.5);
+hold off
+legend('ANNC','MBC');
+xlabel('Time(sec)');
+ylabel('Tracking error z_{13}');
+
+
+L=length(x(:,8));
+tau_ux=zeros(L,1); 
+tau_rx=zeros(L,1); 
+tau_uy=zeros(L,1); 
+tau_ry=zeros(L,1); 
+ for i=2:L
+     tau_ux(i)=(x(i,8)-x(i-1,8))/(t(i)-t(i-1));
+     tau_rx(i)=(x(i,9)-x(i-1,9))/(t(i)-t(i-1));
+     
+     tau_uy(i)=(y(i,8)-y(i-1,8))/(t(i)-t(i-1));
+     tau_ry(i)=(y(i,9)-y(i-1,9))/(t(i)-t(i-1));
+ end
+
+figure(4)
+plot(t,tau_ux,'b',t,tau_uy,'-.r','LineWidth',1.5);
+legend('ANNC','MBC');
+xlabel('Time(sec)');
+ylabel('Control input \tau_u');
+
+figure(5)
+plot(t,tau_rx,'b',t,tau_ry,'-.r','LineWidth',1.5);
+legend('ANNC','MBC');
+xlabel('Time(sec)');
+ylabel('Control input \tau_r');
+
+
+ W1_norm=zeros(L,1);
+ W2_norm=zeros(L,1);
+ W3_norm=zeros(L,1);
+ for i=2:L
+ W1_norm(i)=norm(x(i,16:15+Node11));
+ W2_norm(i)=norm(x(i,16+Node11:15+Node11+Node12));
+ W3_norm(i)=norm(x(i,16+Node11+Node12:15+Node11+Node12+Node13));
+ end
+ figure(6)
+ plot(t,W1_norm,'b',t,W2_norm,'-.r',t,W3_norm,'--k','LineWidth',1.5);
+ legend('$||\hat{W}_1||$','$||\hat{W}_2||$','$||\hat{W}_3||$','Interpreter','latex');
+ xlabel('Time(sec)');
+ ylabel('Norm of NN weight estimates');
+ 
+ 
+ figure(7)
+plot(x(:,1),x(:,2),'b',y(:,1),y(:,2),'-.r',etad1,etad2,':k','LineWidth',1.5);
+legend('ANNC','MBC','Desired trajectory');
+xlabel('x(m)','FontSize',14);
+ylabel('y(m)','FontSize',14);
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Adaptive NN Control (ANNC) Protocol
+% Ode45 Solving differential equations
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function xdot=RBF_OE_Underactuated_USV_function(t,x,k,K_0,kk,varepsilon,k_theta,l,k_omega,mu,k_4,t_c,width,sigma,gamma)
+
+global e_bar_1_inf e_bar_10 kappa_1...
+       e_bar_2_inf e_bar_20 kappa_2...
+       e_bar_3_inf e_bar_30 kappa_3;
+global center1 center2 center3 Node11 Node12 Node13;
+
+k_11=k(1);
+k_12=k(2);
+k_13=k(3);
+
+k_41=k(4);
+k_51=k(5);
+k_52=k(6);
+
+ k_1=kk(1);
+ k_2=kk(2);
+ k_3=kk(3);
+
+K_10=K_0(1);
+K_20=K_0(2);
+K_30=K_0(3);
+
+varepsilon_1=varepsilon(1);
+varepsilon_2=varepsilon(2);
+ 
+k_theta1=k_theta(1);
+k_theta2=k_theta(2);
+k_theta3=k_theta(3);
+
+l_1=l(1);
+l_2=l(2);
+l_3=l(3);
+
+k_omega1=k_omega(1);
+k_omega2=k_omega(2);
+k_omega3=k_omega(3);
+
+mu_1=mu(1);
+mu_2=mu(2);
+mu_3=mu(3);
+
+hat_theta_1=x(10);
+hat_theta_2=x(11);
+hat_theta_3=x(12);
+ 
+hat_omega_1=x(13);
+hat_omega_2=x(14);
+hat_omega_3=x(15);
+
+e_bar_1=(e_bar_10-e_bar_1_inf)*exp(-kappa_1*t)+e_bar_1_inf;
+k_b11=e_bar_1;
+
+e_bar_2=(e_bar_20-e_bar_2_inf)*exp(-kappa_2*t)+e_bar_2_inf;
+k_b12=e_bar_2;
+
+e_bar_3=(e_bar_30-e_bar_3_inf)*exp(-kappa_3*t)+e_bar_3_inf;
+k_b13=e_bar_3;
+
+D_e_bar_1=-kappa_1*(e_bar_10-e_bar_1_inf)*exp(-kappa_1*t);
+D_k_b11=D_e_bar_1;
+
+D_e_bar_2=-kappa_2*(e_bar_20-e_bar_2_inf)*exp(-kappa_2*t);
+D_k_b12=D_e_bar_2;
+
+D_e_bar_3=-kappa_3*(e_bar_30-e_bar_3_inf)*exp(-kappa_3*t);
+D_k_b13=D_e_bar_3;
+
+m11=25.8;
+m22=33.8;
+m23=1.0948;
+m33=2.76;
+bar_m33=m22*m33-m23^2;
+
+if t<=t_c
+    etad1=1.5*t;
+    etad2=0;
+    etad3=0;
+    
+    D_etad1=1.5;
+    D_etad2=0;
+    D_etad3=0;
+    
+    DD_etad1=0;
+    DD_etad2=0;
+    DD_etad3=0;
+    
+else
+    etad1=1.5*t_c+8*sin(0.1*(t-t_c));
+    etad2=15*(1-cos(0.1*(t-t_c)));
+    etad3=0.06*(t-t_c);
+    
+    D_etad1=8*0.1*cos(0.1*(t-t_c));
+    D_etad2=15*0.1*sin(0.1*(t-t_c));
+    D_etad3=0.06;
+    
+    DD_etad1=-8*0.1*0.1*sin(0.1*(t-t_c));
+    DD_etad2=15*0.1*0.1*cos(0.1*(t-t_c));
+    DD_etad3=0;
+    
+end
+
+d11=0.7225+1.3274*abs(x(4))+5.8664*x(4)^2;
+d22=0.8612+36.2823*abs(x(5))+0.805*abs(x(6));
+d23=-0.1079+0.845*abs(x(5))+3.45*abs(x(6));
+d32=-0.1052-5.0437*abs(x(5))-0.13*abs(x(6));
+d33=1.9-0.08*abs(x(5))+0.75*abs(x(6));
+
+f_u=d11*x(4)/m11;
+f_v=-(m23*d32*x(5)-m33*d22*x(5)+m23*d33*x(6)-m33*d23*x(6))/bar_m33;
+f_r=-(m23*d22*x(5)-m22*d32*x(5)-m22*d33*x(6)+m23*d23*x(6))/bar_m33;
+
+phi_u=m22*x(5)*x(6)/m11+m23*x(6)^2/m11;
+phi_v=(-m11*m33+m23^2)*x(4)*x(6)/bar_m33+(m22*m23-m11*m23)*x(4)*x(5)/bar_m33;
+phi_r=(m11*m22-m22^2)*x(4)*x(5)/bar_m33+(m11*m23-m22*m23)*x(4)*x(6)/bar_m33;
+
+z_11=x(1)-etad1;
+z_12=x(2)-etad2;
+z_13=x(3)-etad3;
+
+D_z_11=cos(x(3))*x(4)-sin(x(3))*x(5)-D_etad1;
+D_z_12=sin(x(3))*x(4)+cos(x(3))*x(5)-D_etad2;
+D_z_13=x(6)-D_etad3;
+
+p_1=1/cos(pi*z_11^4/(2*k_b11^4))^2;   
+p_2=1/cos(pi*z_12^4/(2*k_b12^4))^2;
+p_3=1/cos(pi*z_13^4/(2*k_b13^4))^2;
+
+v_z11=p_1*z_11^3;
+v_z12=p_2*z_12^3;
+v_z13=p_3*z_13^3;
+
+D_v_z11=(3*z_11^2*D_z_11*cos(pi*z_11^4/(2*k_b11^4))^2 +z_11^3*sin(pi*z_11^4/k_b11^4)*(8*pi*z_11^3*D_z_11*k_b11^4-8*pi*z_11^4*k_b11^3*D_k_b11)/(4*k_b11^8))/cos(pi*z_11^4/(2*k_b11^4))^4;                
+D_v_z12=(3*z_12^2*D_z_12*cos(pi*z_12^4/(2*k_b12^4))^2 +z_12^3*sin(pi*z_12^4/k_b12^4)*(8*pi*z_12^3*D_z_12*k_b12^4-8*pi*z_12^4*k_b12^3*D_k_b12)/(4*k_b12^8))/cos(pi*z_12^4/(2*k_b12^4))^4;
+D_v_z13=(3*z_13^2*D_z_13*cos(pi*z_13^4/(2*k_b13^4))^2 +z_13^3*sin(pi*z_13^4/k_b13^4)*(8*pi*z_13^3*D_z_13*k_b13^4-8*pi*z_13^4*k_b13^3*D_k_b13)/(4*k_b13^8))/cos(pi*z_13^4/(2*k_b13^4))^4;
+
+if abs(z_11)>0.001
+phi_1=-(4*K_10+k_11)*( k_b11^4/(2*pi*z_11^3) )*sin(pi*z_11^4/(2*k_b11^4))*cos(pi*z_11^4/(2*k_b11^4))-K_10*z_11+D_etad1-0.5*k_1*v_z11^2;
+else
+phi_1=D_etad1-0.5*k_1*v_z11^2;
+end
+
+if abs(z_12)>0.001
+phi_2=-K_20*z_12+D_etad2-(4*K_20+k_12)*k_b12^4/(2*pi*z_12^3)*sin(pi*z_12^4/(2*k_b12^4))*cos(pi*z_12^4/(2*k_b12^4))-0.5*k_2*v_z12^2;
+else
+phi_2=D_etad2-0.5*k_2*v_z12^2;    
+end
+
+if abs(z_11)>0.001
+D_phi_1=-(4*K_10+k_11)*( (16*k_b11^3*D_k_b11*pi*z_11^3-12*k_b11^4*pi*z_11^2*D_z_11)/(16*pi^2*z_11^6)*sin(pi*z_11^4/k_b11^4) +k_b11^4/(4*pi*z_11^3)*cos(pi*z_11^4/k_b11^4)*(4*pi*z_11^3*D_z_11*k_b11^4-4*pi*z_11^4*k_b11^3*D_k_b11)/k_b11^8 )...
+        -K_10*D_z_11+DD_etad1-k_1*v_z11*D_v_z11;
+else
+D_phi_1=-K_10*D_z_11+DD_etad1-k_1*v_z11*D_v_z11;    
+end
+    
+if abs(z_12)>0.001    
+D_phi_2=-(4*K_20+k_12)*( (16*k_b12^3*D_k_b12*pi*z_12^3-12*k_b12^4*pi*z_12^2*D_z_12)/(16*pi^2*z_12^6)*sin(pi*z_12^4/k_b12^4) +k_b12^4/(4*pi*z_12^3)*cos(pi*z_12^4/k_b12^4)*(4*pi*z_12^3*D_z_12*k_b12^4-4*pi*z_12^4*k_b12^3*D_k_b12)/k_b12^8 )...
+        -K_20*D_z_12+DD_etad2-k_2*v_z12*D_v_z12;
+else
+D_phi_2=-K_20*D_z_12+DD_etad2-k_2*v_z12*D_v_z12;    
+end
+
+alpha_1=phi_1*cos(x(3))+phi_2*sin(x(3));
+alpha_2=-phi_1*sin(x(3))+phi_2*cos(x(3));
+alpha_3=-(4*K_30+k_13)*k_b13^4/(2*pi*z_13^3)*sin(pi*z_13^4/(2*k_b13^4))*cos(pi*z_13^4/(2*k_b13^4))...
+        -K_30*z_13+D_etad3-0.5*k_3*v_z13^2;
+
+beta=x(7);           
+h_bar_0=varepsilon_2*atan(beta);
+h_1=0.5*varepsilon_1*(h_bar_0+sin(h_bar_0)*cos(h_bar_0))/m22;
+h_2=0.5*varepsilon_1*(h_bar_0-sin(h_bar_0)*cos(h_bar_0))/m23;
+
+det_Q=varepsilon_1*varepsilon_2/(bar_m33*(1+beta^2));
+inv_Q=[-varepsilon_1*varepsilon_2*sin(h_bar_0)^2/(m23*(1+beta^2)),   varepsilon_1*varepsilon_2*cos(h_bar_0)^2/(m22*(1+beta^2));
+    -m22/bar_m33,     -m23/bar_m33]/det_Q;
+
+z_21=x(4)-alpha_1;
+z_22=x(5)-alpha_2-h_1;
+z_23=x(6)-alpha_3-h_2;
+z_3=[z_22; z_23];
+
+width1=width(1);
+width2=width(2);
+width3=width(3);
+
+gamma1=gamma(1);
+gamma2=gamma(2);
+gamma3=gamma(3);
+
+sigma1=sigma(1);
+sigma2=sigma(2);
+sigma3=sigma(3);
+
+W1=x(16:15+Node11);
+Z1=[x(4);abs(x(4))];
+S1=zeros(Node11,1);
+for i=1:Node11
+    S1(i,1)=exp(-sum((Z1-center1(:,i)).^2)/(width1^2));
+end
+dW1=gamma1*(S1*z_21-sigma1*abs(z_21)*W1);
+F1_nn=W1'*S1;
+
+W2=x(16+Node11:15+Node11+Node12);
+Z2=[x(5);x(6)];
+S2=zeros(Node12,1);
+for i=1:Node12
+    S2(i,1)=exp(-sum((Z2-center2(:,i)).^2)/(width2^2));
+end
+dW2=gamma2*(S2*z_22-sigma2*abs(z_22)*W2);
+F2_nn=W2'*S2;
+
+W3=x(16+Node11+Node12:15+Node11+Node12+Node13);
+Z3=[x(5);x(6)];
+S3=zeros(Node13,1);
+for i=1:Node13
+    S3(i,1)=exp(-sum((Z3-center3(:,i)).^2)/(width3^2));
+end
+dW3=gamma3*(S3*z_23-sigma3*abs(z_23)*W3);
+F3_nn=W3'*S3;
+
+D_alpha_1=D_phi_1*cos(x(3))-phi_1*sin(x(3))*x(6)+D_phi_2*sin(x(3))+phi_2*cos(x(3))*x(6);
+D_alpha_2=-D_phi_1*sin(x(3))-phi_1*cos(x(3))*x(6)+D_phi_2*cos(x(3))-phi_2*sin(x(3))*x(6);
+D_alpha_3=-(4*K_30+k_13)*( (16*k_b13^3*D_k_b13*pi*z_13^3-12*k_b13^4*pi*z_13^2*D_z_13)/(16*pi^2*z_13^6)*sin(pi*z_13^4/k_b13^4) +k_b13^4/(4*pi*z_13^3)*cos(pi*z_13^4/k_b13^4)*(4*pi*z_13^3*D_z_13*k_b13^4-4*pi*z_13^4*k_b13^3*D_k_b13)/k_b13^8 )...
+          -K_30*D_z_13+DD_etad3-k_3*v_z13*D_v_z13;
+
+d_hat_theta_1=l_1*(z_21^3/m11-k_theta1*hat_theta_1 );
+d_hat_theta_2=l_2*(norm(z_3)^2*m33/bar_m33*z_22-norm(z_3)^2*m23/bar_m33*z_23-k_theta2*hat_theta_2);
+d_hat_theta_3=l_3*(norm(z_3)^2*m22/bar_m33*z_23-norm(z_3)^2*m23/bar_m33*z_22-k_theta3*hat_theta_3);
+
+d_hat_omega_1=mu_1*(3*z_21^4/(4*k_4^4*m11^4)-k_omega1*hat_omega_1 );
+d_hat_omega_2=mu_2*(3/(4*k_4^2)*(m33/bar_m33)^4*z_22^4+3/(4*k_4^2)*(m23/bar_m33)^4*z_23^4-k_omega2*hat_omega_2);
+d_hat_omega_3=mu_3*(3/(4*k_4^2)*(m23/bar_m33)^4*z_22^4+3/(4*k_4^2)*(m22/bar_m33)^4*z_23^4-k_omega3*hat_omega_3);
+
+tau_u=m11*(-k_41*z_21-phi_u+F1_nn+D_alpha_1-hat_theta_1/m11-v_z11^4*z_21/(4*k_4^4)-v_z12^4*z_21/(4*k_4^4)-3*hat_omega_1*z_21/(4*k_4^4*m11^4));
+        
+bar_z_22=-k_51*z_22-phi_v+F2_nn+D_alpha_2-m33/bar_m33*hat_theta_2+m23/bar_m33*hat_theta_3...
+         -3/(4*k_4^2)*(m33/bar_m33)^4*hat_omega_2*z_22-3/(4*k_4^2)*(m23/bar_m33)^4*hat_omega_3*z_22...
+         -v_z11^4*z_22/(4*k_4^4)-v_z12^4*z_22/(4*k_4^4);
+bar_z_31=-k_52*z_23-phi_r+F3_nn+D_alpha_3-m22/bar_m33*hat_theta_3+m23/bar_m33*hat_theta_2...
+         -3/(4*k_4^2)*(m22/bar_m33)^4*hat_omega_3*z_23-3/(4*k_4^2)*(m23/bar_m33)^4*hat_omega_2*z_23...
+         -v_z13^4*z_23/(4*k_4^4);
+Temp=[bar_z_22; bar_z_31];
+
+tau_r_beta=inv_Q*Temp;
+tau_r=tau_r_beta(1);
+D_beta=tau_r_beta(2);
+  
+bar_tau_wu1=m11*sin(0.01*t);           
+bar_tau_wv1=m22*sin(0.01*t);         
+bar_tau_wr1=m33*sin(0.01*t);      
+
+D_w_1=rand;   
+D_w_2=rand;
+D_w_3=rand;
+
+tilde_tau_wu=0.5*m11*sin(0.03*t)*D_w_1;  
+tilde_tau_wv=0.5*m22*cos(0.03*t)*D_w_2;
+tilde_tau_wr=0.5*m33*cos(0.03*t)*D_w_3;
+
+tau_wu=bar_tau_wu1+tilde_tau_wu;
+tau_wv=bar_tau_wv1+tilde_tau_wv;
+tau_wr=bar_tau_wr1+tilde_tau_wr;
+
+bar_tau_wu=tau_wu/m11;
+bar_tau_wv=(m33*tau_wv-m23*tau_wr)/bar_m33;
+bar_tau_wr=(m22*tau_wr-m23*tau_wv)/bar_m33;
+
+dx=cos(x(3))*x(4)-sin(x(3))*x(5);
+dy=sin(x(3))*x(4)+cos(x(3))*x(5);
+dpsi=x(6);
+du=phi_u - f_u + tau_u/m11         + bar_tau_wu;
+dv=phi_v - f_v - m23*tau_r/bar_m33 + bar_tau_wv;
+dr=phi_r - f_r + m22*tau_r/bar_m33 + bar_tau_wr;
+
+xdot=[dx dy dpsi du dv dr D_beta tau_u tau_r d_hat_theta_1 d_hat_theta_2  d_hat_theta_3 d_hat_omega_1 d_hat_omega_2 d_hat_omega_3 dW1' dW2' dW3']';
+end
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Model-Based Control (MBC)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clear
+clc
+close all
+tic
+
+global e_bar_1_inf e_bar_10 kappa_1...
+       e_bar_2_inf e_bar_20 kappa_2...
+       e_bar_3_inf e_bar_30 kappa_3;
+
+xs0=[0,3,-2,0.5,2,-0.5];
+
+tau_u0=0;
+tau_r0=0;
+beta0=0;  
+
+k_theta1=0.2;   
+k_theta2=0.1;
+k_theta3=0.3;
+k_theta=[k_theta1;k_theta2;k_theta3];
+
+l_1=0.01;   
+l_2=0.01;
+l_3=0.01;
+l=[l_1;l_2;l_3];
+
+k_omega1=0.4; 
+k_omega2=0.3;
+k_omega3=0.1;
+k_omega=[k_omega1;k_omega2;k_omega3];
+
+mu_1=0.004;
+mu_2=0.005;
+mu_3=0.006;
+mu=[mu_1;mu_2;mu_3];
+
+hat_theta_10=1.1274;
+hat_theta_20=1.8902;
+hat_theta_30=0.1278;
+
+hat_omega_10=0.2;  
+hat_omega_20=0.4;
+hat_omega_30=0.0003;
+
+k_4=8;  
+k=[55;12;10;  
+   85;55;10]; 
+kk=[0.001; 0.021; 0.001]; 
+varepsilon=[11;15];  
+epsilon=0.04;  
+ 
+e_bar_1_inf=0.03;
+e_bar_10=0.18;
+kappa_1=0.7;
+k_b110=e_bar_10;
+
+e_bar_2_inf=0.5;
+e_bar_20=5;
+kappa_2=0.7;
+k_b120=e_bar_20;
+
+e_bar_3_inf=3;
+e_bar_30=7.5;
+kappa_3=0.7;
+k_b130=e_bar_30;
+
+D_e_bar_10=-kappa_1*(e_bar_10-e_bar_1_inf);
+D_k_b110=D_e_bar_10;
+
+D_e_bar_20=-kappa_2*(e_bar_20-e_bar_2_inf);
+D_k_b120=D_e_bar_20;
+
+D_e_bar_30=-kappa_3*(e_bar_30-e_bar_3_inf);
+D_k_b130=D_e_bar_30;
+
+K_10=sqrt( (D_k_b110/k_b110)^2 +epsilon);
+K_20=sqrt( (D_k_b120/k_b120)^2 +epsilon);
+K_30=sqrt( (D_k_b130/k_b130)^2 +epsilon);
+
+K_0=[K_10; K_20; K_30];
+
+tfinal=15;
+t_c=5;
+x0=[xs0 beta0 tau_u0 tau_r0 hat_theta_10 hat_theta_20 hat_theta_30 hat_omega_10 hat_omega_20 hat_omega_30]';
+
+[t,y]=ode45(@MB_OE_Underactuated_USV_function,0:0.1:tfinal,x0,[],k,K_0,kk,varepsilon,k_theta,l,k_omega,mu,k_4,t_c);
+
+e_bar_1=(e_bar_10-e_bar_1_inf)*exp(-kappa_1*t)+e_bar_1_inf;
+e_bar_2=(e_bar_20-e_bar_2_inf)*exp(-kappa_2*t)+e_bar_2_inf;
+e_bar_3=(e_bar_30-e_bar_3_inf)*exp(-kappa_3*t)+e_bar_3_inf;
+
+k_b11=e_bar_1;
+k_b12=e_bar_2;
+k_b13=e_bar_3;
+
+
+len=length(t);
+etad1=zeros(len,1);
+etad2=zeros(len,1);
+etad3=zeros(len,1);
+for n=1:len
+    if t(n)<=t_c
+        etad1(n)=1.5*t(n);
+        etad2(n)=0;
+        etad3(n)=0;
+    else
+        etad1(n)=1.5*t_c+8*sin(0.1*(t(n)-t_c));
+        etad2(n)=15*(1-cos(0.1*(t(n)-t_c)));
+        etad3(n)=0.06*(t(n)-t_c);
+    end
+end
+
+figure(1)
+plot(t,y(:,1)-etad1,'-b','LineWidth',1.5);
+hold on
+plot(t,k_b11,'--k','LineWidth',1.5);
+hold on
+plot(t,-k_b11,'--k','LineWidth',1.5);
+hold off
+legend('MBC');
+xlabel('Time(sec)');
+ylabel('Tracking error z_{11}');
+
+
+figure(2)
+plot(t,y(:,2)-etad2,'b','LineWidth',1.5);
+hold on
+plot(t,k_b12,'--k','LineWidth',1.5);
+hold on
+plot(t,-k_b12,'--k','LineWidth',1.5);
+hold off
+legend('MBC');
+xlabel('Time(sec)');
+ylabel('Tracking error z_{12}');
+
+
+figure(3)
+plot(t,y(:,3)-etad3,'b','LineWidth',1.5);
+hold on
+plot(t,k_b13,'--k','LineWidth',1.5);
+hold on
+plot(t,-k_b13,'--k','LineWidth',1.5);
+hold off
+legend('MBC');
+xlabel('Time(sec)');
+ylabel('Tracking error z_{13}');
+
+figure(4)
+plot(etad1,etad2,'-.r',y(:,1),y(:,2),'-b','LineWidth',1.5);
+xlabel('x(m)','FontSize',14);
+ylabel('y(m)','FontSize',14);
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Model-Based Control (MBC)
+% Ode45 Solving differential equations
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function xdot=MB_OE_Underactuated_USV_function(t,x,k,K_0,kk,varepsilon,k_theta,l,k_omega,mu,k_4,t_c)
+
+global e_bar_1_inf e_bar_10 kappa_1...
+       e_bar_2_inf e_bar_20 kappa_2...
+       e_bar_3_inf e_bar_30 kappa_3;
+
+k_11=k(1);
+k_12=k(2);
+k_13=k(3);
+
+k_31=k(4);
+k_21=k(5);
+k_22=k(6);
+
+ k_1=kk(1);
+ k_2=kk(2);
+ k_3=kk(3);
+ 
+K_10=K_0(1);
+K_20=K_0(2);
+K_30=K_0(3);
+
+varepsilon_1=varepsilon(1);
+varepsilon_2=varepsilon(2);
+ 
+k_theta1=k_theta(1);
+k_theta2=k_theta(2);
+k_theta3=k_theta(3);
+
+l_1=l(1);
+l_2=l(2);
+l_3=l(3);
+
+k_omega1=k_omega(1);
+k_omega2=k_omega(2);
+k_omega3=k_omega(3);
+
+mu_1=mu(1);
+mu_2=mu(2);
+mu_3=mu(3);
+
+hat_theta_1=x(10);
+hat_theta_2=x(11);
+hat_theta_3=x(12);
+ 
+hat_omega_1=x(13);
+hat_omega_2=x(14);
+hat_omega_3=x(15);
+
+e_bar_1=(e_bar_10-e_bar_1_inf)*exp(-kappa_1*t)+e_bar_1_inf;
+k_b11=e_bar_1;
+
+e_bar_2=(e_bar_20-e_bar_2_inf)*exp(-kappa_2*t)+e_bar_2_inf;
+k_b12=e_bar_2;
+
+e_bar_3=(e_bar_30-e_bar_3_inf)*exp(-kappa_3*t)+e_bar_3_inf;
+k_b13=e_bar_3;
+
+D_e_bar_1=-kappa_1*(e_bar_10-e_bar_1_inf)*exp(-kappa_1*t);
+D_k_b11=D_e_bar_1;
+
+D_e_bar_2=-kappa_2*(e_bar_20-e_bar_2_inf)*exp(-kappa_2*t);
+D_k_b12=D_e_bar_2;
+
+D_e_bar_3=-kappa_3*(e_bar_30-e_bar_3_inf)*exp(-kappa_3*t);
+D_k_b13=D_e_bar_3;
+
+m11=25.8;
+m22=33.8;
+m23=1.0948;
+m33=2.76;
+bar_m33=m22*m33-m23^2;
+
+if t<=t_c
+    etad1=1.5*t;
+    etad2=0;
+    etad3=0;
+    
+    D_etad1=1.5;
+    D_etad2=0;
+    D_etad3=0;
+    
+    DD_etad1=0;
+    DD_etad2=0;
+    DD_etad3=0;
+    
+else
+    etad1=1.5*t_c+8*sin(0.1*(t-t_c));
+    etad2=15*(1-cos(0.1*(t-t_c)));
+    etad3=0.06*(t-t_c);
+    
+    D_etad1=8*0.1*cos(0.1*(t-t_c));
+    D_etad2=15*0.1*sin(0.1*(t-t_c));
+    D_etad3=0.06;
+    
+    DD_etad1=-8*0.1*0.1*sin(0.1*(t-t_c));
+    DD_etad2=15*0.1*0.1*cos(0.1*(t-t_c));
+    DD_etad3=0;
+    
+end
+
+d11=0.7225+1.3274*abs(x(4))+5.8664*x(4)^2;
+d22=0.8612+36.2823*abs(x(5))+0.805*abs(x(6));
+d23=-0.1079+0.845*abs(x(5))+3.45*abs(x(6));
+d32=-0.1052-5.0437*abs(x(5))-0.13*abs(x(6));
+d33=1.9-0.08*abs(x(5))+0.75*abs(x(6));
+
+f_u=d11*x(4)/m11;
+f_v=-(m23*d32*x(5)-m33*d22*x(5)+m23*d33*x(6)-m33*d23*x(6))/bar_m33;
+f_r=-(m23*d22*x(5)-m22*d32*x(5)-m22*d33*x(6)+m23*d23*x(6))/bar_m33;
+
+phi_u=m22*x(5)*x(6)/m11+m23*x(6)^2/m11;
+phi_v=(-m11*m33+m23^2)*x(4)*x(6)/bar_m33+(m22*m23-m11*m23)*x(4)*x(5)/bar_m33;
+phi_r=(m11*m22-m22^2)*x(4)*x(5)/bar_m33+(m11*m23-m22*m23)*x(4)*x(6)/bar_m33;
+
+z_11=x(1)-etad1;
+z_12=x(2)-etad2;
+z_13=x(3)-etad3;
+
+D_z_11=cos(x(3))*x(4)-sin(x(3))*x(5)-D_etad1;
+D_z_12=sin(x(3))*x(4)+cos(x(3))*x(5)-D_etad2;
+D_z_13=x(6)-D_etad3;
+
+p_1=1/cos(pi*z_11^4/(2*k_b11^4))^2;   
+p_2=1/cos(pi*z_12^4/(2*k_b12^4))^2;
+p_3=1/cos(pi*z_13^4/(2*k_b13^4))^2;
+
+v_z11=p_1*z_11^3;
+v_z12=p_2*z_12^3;
+v_z13=p_3*z_13^3;
+
+D_v_z11=(3*z_11^2*D_z_11*cos(pi*z_11^4/(2*k_b11^4))^2 +z_11^3*sin(pi*z_11^4/k_b11^4)*(8*pi*z_11^3*D_z_11*k_b11^4-8*pi*z_11^4*k_b11^3*D_k_b11)/(4*k_b11^8))/cos(pi*z_11^4/(2*k_b11^4))^4;                
+D_v_z12=(3*z_12^2*D_z_12*cos(pi*z_12^4/(2*k_b12^4))^2 +z_12^3*sin(pi*z_12^4/k_b12^4)*(8*pi*z_12^3*D_z_12*k_b12^4-8*pi*z_12^4*k_b12^3*D_k_b12)/(4*k_b12^8))/cos(pi*z_12^4/(2*k_b12^4))^4;
+D_v_z13=(3*z_13^2*D_z_13*cos(pi*z_13^4/(2*k_b13^4))^2 +z_13^3*sin(pi*z_13^4/k_b13^4)*(8*pi*z_13^3*D_z_13*k_b13^4-8*pi*z_13^4*k_b13^3*D_k_b13)/(4*k_b13^8))/cos(pi*z_13^4/(2*k_b13^4))^4;
+
+if abs(z_11)>0.000001
+phi_1=-(4*K_10+k_11)*( k_b11^4/(2*pi*z_11^3) )*sin(pi*z_11^4/(2*k_b11^4))*cos(pi*z_11^4/(2*k_b11^4))-K_10*z_11+D_etad1-0.5*k_1*v_z11^2;
+else
+phi_1=D_etad1-0.5*k_1*v_z11^2;
+end
+
+if abs(z_12)>0.000001
+phi_2=-K_20*z_12+D_etad2-(4*K_20+k_12)*k_b12^4/(2*pi*z_12^3)*sin(pi*z_12^4/(2*k_b12^4))*cos(pi*z_12^4/(2*k_b12^4))-0.5*k_2*v_z12^2;
+else
+phi_2=D_etad2-0.5*k_2*v_z12^2;    
+end
+
+if abs(z_11)>0.000001
+D_phi_1=-(4*K_10+k_11)*( (16*k_b11^3*D_k_b11*pi*z_11^3-12*k_b11^4*pi*z_11^2*D_z_11)/(16*pi^2*z_11^6)*sin(pi*z_11^4/k_b11^4) +k_b11^4/(4*pi*z_11^3)*cos(pi*z_11^4/k_b11^4)*(4*pi*z_11^3*D_z_11*k_b11^4-4*pi*z_11^4*k_b11^3*D_k_b11)/k_b11^8 )...
+        -K_10*D_z_11+DD_etad1-k_1*v_z11*D_v_z11;
+else
+D_phi_1=-K_10*D_z_11+DD_etad1-k_1*v_z11*D_v_z11;    
+end
+    
+if abs(z_12)>0.000001    
+D_phi_2=-(4*K_20+k_12)*( (16*k_b12^3*D_k_b12*pi*z_12^3-12*k_b12^4*pi*z_12^2*D_z_12)/(16*pi^2*z_12^6)*sin(pi*z_12^4/k_b12^4) +k_b12^4/(4*pi*z_12^3)*cos(pi*z_12^4/k_b12^4)*(4*pi*z_12^3*D_z_12*k_b12^4-4*pi*z_12^4*k_b12^3*D_k_b12)/k_b12^8 )...
+        -K_20*D_z_12+DD_etad2-k_2*v_z12*D_v_z12;
+else
+D_phi_2=-K_20*D_z_12+DD_etad2-k_2*v_z12*D_v_z12;    
+end
+  
+alpha_1=phi_1*cos(x(3))+phi_2*sin(x(3));
+alpha_2=-phi_1*sin(x(3))+phi_2*cos(x(3));
+alpha_3=-(4*K_30+k_13)*k_b13^4/(2*pi*z_13^3)*sin(pi*z_13^4/(2*k_b13^4))*cos(pi*z_13^4/(2*k_b13^4))...
+        -K_30*z_13+D_etad3-0.5*k_3*v_z13^2;
+
+beta=x(7);           
+h_bar_0=varepsilon_2*atan(beta);
+h_1=0.5*varepsilon_1*(h_bar_0+sin(h_bar_0)*cos(h_bar_0))/m22;
+h_2=0.5*varepsilon_1*(h_bar_0-sin(h_bar_0)*cos(h_bar_0))/m23;
+
+det_Q=varepsilon_1*varepsilon_2/(bar_m33*(1+beta^2));
+inv_Q=[-varepsilon_1*varepsilon_2*sin(h_bar_0)^2/(m23*(1+beta^2)),   varepsilon_1*varepsilon_2*cos(h_bar_0)^2/(m22*(1+beta^2));
+    -m22/bar_m33,     -m23/bar_m33]/det_Q;
+
+z_21=x(4)-alpha_1;
+z_22=x(5)-alpha_2-h_1;
+z_23=x(6)-alpha_3-h_2;
+z_3=[z_22; z_23];
+
+D_alpha_1=D_phi_1*cos(x(3))-phi_1*sin(x(3))*x(6)+D_phi_2*sin(x(3))+phi_2*cos(x(3))*x(6);
+D_alpha_2=-D_phi_1*sin(x(3))-phi_1*cos(x(3))*x(6)+D_phi_2*cos(x(3))-phi_2*sin(x(3))*x(6);
+D_alpha_3=-(4*K_30+k_13)*( (16*k_b13^3*D_k_b13*pi*z_13^3-12*k_b13^4*pi*z_13^2*D_z_13)/(16*pi^2*z_13^6)*sin(pi*z_13^4/k_b13^4) +k_b13^4/(4*pi*z_13^3)*cos(pi*z_13^4/k_b13^4)*(4*pi*z_13^3*D_z_13*k_b13^4-4*pi*z_13^4*k_b13^3*D_k_b13)/k_b13^8 )...
+          -K_30*D_z_13+DD_etad3-k_3*v_z13*D_v_z13;
+
+d_hat_theta_1=l_1*(z_21^3/m11-k_theta1*hat_theta_1 );
+d_hat_theta_2=l_2*(norm(z_3)^2*m33/bar_m33*z_22-norm(z_3)^2*m23/bar_m33*z_23-k_theta2*hat_theta_2);
+d_hat_theta_3=l_3*(norm(z_3)^2*m22/bar_m33*z_23-norm(z_3)^2*m23/bar_m33*z_22-k_theta3*hat_theta_3);
+
+d_hat_omega_1=mu_1*(3*z_21^4/(4*k_4^4*m11^4)-k_omega1*hat_omega_1 );
+d_hat_omega_2=mu_2*(3/(4*k_4^2)*(m33/bar_m33)^4*z_22^4+3/(4*k_4^2)*(m23/bar_m33)^4*z_23^4-k_omega2*hat_omega_2);
+d_hat_omega_3=mu_3*(3/(4*k_4^2)*(m23/bar_m33)^4*z_22^4+3/(4*k_4^2)*(m22/bar_m33)^4*z_23^4-k_omega3*hat_omega_3);
+
+tau_u=m11*(-k_31*z_21-phi_u+f_u+D_alpha_1-hat_theta_1/m11-v_z11^4*z_21/(4*k_4^4)-v_z12^4*z_21/(4*k_4^4)-3*hat_omega_1*z_21/(4*k_4^4*m11^4));
+        
+bar_z_22=-k_21*z_22-phi_v+f_v+D_alpha_2-m33/bar_m33*hat_theta_2+m23/bar_m33*hat_theta_3...
+         -3/(4*k_4^2)*(m33/bar_m33)^4*hat_omega_2*z_22-3/(4*k_4^2)*(m23/bar_m33)^4*hat_omega_3*z_22...
+         -v_z11^4*z_22/(4*k_4^4)-v_z12^4*z_22/(4*k_4^4);
+bar_z_31=-k_22*z_23-phi_r+f_r+D_alpha_3-m22/bar_m33*hat_theta_3+m23/bar_m33*hat_theta_2...
+         -3/(4*k_4^2)*(m22/bar_m33)^4*hat_omega_3*z_23-3/(4*k_4^2)*(m23/bar_m33)^4*hat_omega_2*z_23...
+         -v_z13^4*z_23/(4*k_4^4);
+Temp=[bar_z_22; bar_z_31];
+
+tau_r_beta=inv_Q*Temp;
+tau_r=tau_r_beta(1);
+D_beta=tau_r_beta(2);
+  
+bar_tau_wu1=m11*sin(0.01*t);        
+bar_tau_wv1=m22*sin(0.01*t);         
+bar_tau_wr1=m33*sin(0.01*t);      
+
+D_w_1=rand;    
+D_w_2=rand;
+D_w_3=rand;
+
+tilde_tau_wu=0.5*m11*sin(0.03*t)*D_w_1; 
+tilde_tau_wv=0.5*m22*cos(0.03*t)*D_w_2;
+tilde_tau_wr=0.5*m33*cos(0.03*t)*D_w_3;
+tau_wu=bar_tau_wu1+tilde_tau_wu;
+tau_wv=bar_tau_wv1+tilde_tau_wv;
+tau_wr=bar_tau_wr1+tilde_tau_wr;
+
+bar_tau_wu=tau_wu/m11;
+bar_tau_wv=(m33*tau_wv-m23*tau_wr)/bar_m33;
+bar_tau_wr=(m22*tau_wr-m23*tau_wv)/bar_m33;
+
+dx=cos(x(3))*x(4)-sin(x(3))*x(5);
+dy=sin(x(3))*x(4)+cos(x(3))*x(5);
+dpsi=x(6);
+
+du=phi_u - f_u + tau_u/m11         + bar_tau_wu;
+dv=phi_v - f_v - m23*tau_r/bar_m33 + bar_tau_wv;
+dr=phi_r - f_r + m22*tau_r/bar_m33 + bar_tau_wr;
+
+xdot=[dx dy dpsi du dv dr D_beta tau_u tau_r d_hat_theta_1 d_hat_theta_2  d_hat_theta_3 d_hat_omega_1 d_hat_omega_2 d_hat_omega_3]';
+end
